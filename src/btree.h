@@ -332,6 +332,11 @@ class BTreeIndex {
 	File		*file;
 
   /**
+   * File object for the index file.
+   */
+  std::string indexFileName;  
+
+  /**
    * Buffer Manager Instance.
    */
 	BufMgr	*bufMgr;

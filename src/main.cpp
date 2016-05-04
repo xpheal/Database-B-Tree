@@ -468,7 +468,7 @@ int intScan(BTreeIndex * index, int lowVal, Operator lowOp, int highVal, Operato
 			}
 		}
 		catch(IndexScanCompletedException e)
-		{
+		{	
 			break;
 		}
 
