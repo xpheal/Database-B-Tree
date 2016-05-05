@@ -91,6 +91,12 @@ class RIDKeyPair{
 public:
 	RecordId rid;
 	T key;
+
+  RIDKeyPair(RecordId r, T k){
+    rid = r;
+    key = k;
+  }
+
 	void set( RecordId r, T k)
 	{
 		rid = r;
@@ -107,6 +113,12 @@ class PageKeyPair{
 public:
 	PageId pageNo;
 	T key;
+
+  PageKeyPair(PageId p, T k){
+    pageNo = p;
+    key = k;
+  }
+
 	void set( int p, T k)
 	{
 		pageNo = p;
@@ -433,6 +445,15 @@ class BTreeIndex {
    * High Operator. Can only be LT(<) or LTE(<=).
    */
 	Operator	highOp;
+
+  // Swap x keyPair with y keyPair if x < y
+  void swapIntKeyPair(RIDKeyPair<int>* x, RIDKeyPair<int>* y);
+
+  // Sort the key array and pageNo array
+  void insertIntNonLeafArray(void* array, int numItems);
+
+  // Sort the key array and Rid array
+  void insertIntLeafArray(void* array, void* ridArray, int& numItems, RIDKeyPair<int>* x);
 
   // Print tree
   void printTree(void);

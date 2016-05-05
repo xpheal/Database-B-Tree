@@ -171,10 +171,12 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
 
 BTreeIndex::~BTreeIndex()
 {
+	// If it is still scanning, end the scan
 	if(scanExecuting){
 		endScan();
 	}
 	
+	// Flush all dirty pages and close file
 	bufMgr->flushFile(file);
 	delete file;
 	File::remove(indexFileName);
@@ -192,19 +194,22 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid)
 
 	switch(attributeType){
 		case INTEGER:{
+			// Initialize the variables
 			int keyInt = *(int*)key;
+			RIDKeyPair<int>* keyPair = new RIDKeyPair<int>(rid, keyInt);
 			NonLeafNodeInt* rootInt = (NonLeafNodeInt*)rootPage;
+			Page* leafPage;
+
 			if(rootInt->level == 0){
-				// If there is only one leaf node
+				// If there is only one leaf node, then check if the leaf node exist
 				if(rootInt->pageNoArray[0] == 0){
 					// If the leaf node does not exist yet(first insert), create the first leaf node
-					Page* leafPage;
 					bufMgr->allocPage(file, rootInt->pageNoArray[0], leafPage);	
 					LeafNodeInt* leafInt = (LeafNodeInt*)leafPage;
 
 					// Insert entry
-					leafInt->keyArray[0] = *(int*)key;
-					leafInt->ridArray[0] = rid;
+					leafInt->keyArray[0] = keyPair->key;
+					leafInt->ridArray[0] = keyPair->rid;
 					leafInt->numKeys = 1;
 					leafInt->rightSibPageNo = 0;
 
@@ -214,89 +219,59 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid)
 				}
 				else{
 					// If the first leaf node exist 
-					Page* leafPage;
 					bufMgr->readPage(file, rootInt->pageNoArray[0], leafPage);
 
 					// Get the leaf node
-					LeafNodeInt* leafInt = (LeafNodeInt*)leafPage;
-					// std::cout << leafInt->numKeys << std::endl;
+					LeafNodeInt* leafNode = (LeafNodeInt*)leafPage;
 
-					if(leafInt->numKeys >= leafOccupancy){
-						// If the leaf node is full, split the root
-						// Sort the key array of the leaf node, the extra key or the largest key is stored in an int variable
-						int i = 0;
+					// If the leaf node is full, split the root
+					if(leafNode->numKeys >= leafOccupancy){
+						// Remove the last item to be inserted later
+						RIDKeyPair<int>* endKeyPair = new RIDKeyPair<int>(leafNode->ridArray[leafOccupancy-1], leafNode->keyArray[leafOccupancy-1]);
+						leafNode->numKeys--;
 
-						// Remove the last item
-						int lastKey = leafInt->keyArray[leafOccupancy-1];
-						RecordId lastRecord = leafInt->ridArray[leafOccupancy-1];
-						leafInt->numKeys--;
+						// Insert the keyPair
+						insertIntLeafArray(leafNode->keyArray, leafNode->ridArray, leafNode->numKeys, keyPair);
 
-						// Find the spot to insert the key
-						for(i = 0; i < leafInt->numKeys; i++){
-							if(!(keyInt >= leafInt->keyArray[i])){
-								break;
-							}
-						}
-
-						// Shift the keys that are larger than the current key to the right
-						for(int j = leafInt->numKeys; j > i; j--){
-							leafInt->keyArray[j] = leafInt->keyArray[j-1];
-							leafInt->ridArray[j] = leafInt->ridArray[j-1];
-						}
-
-						// Insert the current key and record id
-						leafInt->keyArray[i] = keyInt;
-						leafInt->ridArray[i] = rid;
-						leafInt->numKeys++;
-
-						// Compare the extra key
-						if(lastKey < leafInt->keyArray[leafOccupancy-1]){
-							int temp = leafInt->keyArray[leafOccupancy-1];
-							leafInt->keyArray[leafOccupancy-1] = lastKey;
-							lastKey = temp;
-
-							RecordId tempR = leafInt->ridArray[leafOccupancy-1];
-							leafInt->ridArray[leafOccupancy-1] = lastRecord;
-							lastRecord = tempR;
-						}
+						// Compare the extra key Pair
+						RIDKeyPair<int>* currKeyPair = new RIDKeyPair<int>(leafNode->ridArray[leafOccupancy-1], leafNode->keyArray[leafOccupancy-1]);
+						swapIntKeyPair(endKeyPair, currKeyPair);
+						leafNode->keyArray[leafOccupancy-1] = currKeyPair->key;
+						leafNode->ridArray[leafOccupancy-1] = currKeyPair->rid;
 						// The array is now sorted
 
 						// Split the node
-						Page* leafPageNew;
-						bufMgr->allocPage(file, rootInt->pageNoArray[1], leafPageNew);	
-						LeafNodeInt* leafIntNew = (LeafNodeInt*)leafPageNew;
+						Page* newLeafPage;
+						bufMgr->allocPage(file, rootInt->pageNoArray[1], newLeafPage);	
+						LeafNodeInt* newLeafNode = (LeafNodeInt*)newLeafPage;
 
 						// The position (k to end) in the array that is moved to another node
 						int k = (leafOccupancy+1)/2;
 
 						// Set the root node
 						rootInt->level++;
-						rootInt->keyArray[0] = leafInt->keyArray[k];
+						rootInt->keyArray[0] = leafNode->keyArray[k];
 						rootInt->numKeys++;
 
 						// Set the left leaf node
-						leafInt->numKeys = k;
-						leafInt->rightSibPageNo = rootInt->pageNoArray[1];
+						leafNode->numKeys = k;
+						leafNode->rightSibPageNo = rootInt->pageNoArray[1];
 
 						// Set the right leaf node
-						leafIntNew->rightSibPageNo = 0;
-						leafIntNew->numKeys = 0;
+						newLeafNode->rightSibPageNo = 0;
+						newLeafNode->numKeys = 0;
 
+						// Copy half of the array to the new array
 						int j = 0;
 						for(j = k; j < leafOccupancy; j++){
-							leafIntNew->keyArray[j-k] = leafInt->keyArray[j];
-							leafIntNew->ridArray[j-k] = leafInt->ridArray[j];
-							leafIntNew->numKeys++;
+							newLeafNode->keyArray[j-k] = leafNode->keyArray[j];
+							newLeafNode->ridArray[j-k] = leafNode->ridArray[j];
+							newLeafNode->numKeys++;
 						}
 
-						leafIntNew->keyArray[j-k] = lastKey;
-						leafIntNew->ridArray[j-k] = lastRecord;
-						leafIntNew->numKeys++;
-
-						// Set the empty slots to 0, for debugging purposes
-						for(int l = k; l < leafOccupancy; l++){
-							leafInt->keyArray[l] = 0;
-						}
+						newLeafNode->keyArray[j-k] = endKeyPair->key;
+						newLeafNode->ridArray[j-k] = endKeyPair->rid;
+						newLeafNode->numKeys++;
 
 						// Write the changes
 						bufMgr->unPinPage(file, rootInt->pageNoArray[0], true);
@@ -305,25 +280,7 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid)
 					}
 					else{
 						// Insert the key
-						int i = 0;
-
-						// Find the spot to insert the key
-						for(i = 0; i < leafInt->numKeys; i++){
-							if(!(keyInt >= leafInt->keyArray[i])){
-								break;
-							}
-						}
-
-						// Shift the keys that are larger than the current key to the right
-						for(int j = leafInt->numKeys; j > i; j--){
-							leafInt->keyArray[j] = leafInt->keyArray[j-1];
-							leafInt->ridArray[j] = leafInt->ridArray[j-1];
-						}
-
-						// Insert the current key and record id
-						leafInt->keyArray[i] = keyInt;
-						leafInt->ridArray[i] = rid;
-						leafInt->numKeys++;
+						insertIntLeafArray(leafNode->keyArray, leafNode->ridArray, leafNode->numKeys, keyPair);
 
 						// Write the changes
 						bufMgr->unPinPage(file, rootInt->pageNoArray[0], true);
@@ -382,31 +339,13 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid)
 					PageId leafIntNewId;
 
 					// If the leaf node is full, split the node
-					// Sort the key array of the leaf node, the extra key or the largest key is stored in an int variable
-					int i = 0;
 
 					// Remove the last item
 					lastKey = currLeafInt->keyArray[leafOccupancy-1];
 					lastRecord = currLeafInt->ridArray[leafOccupancy-1];
 					currLeafInt->numKeys--;
 
-					// Find the spot to insert the key
-					for(i = 0; i < currLeafInt->numKeys; i++){
-						if(!(keyInt >= currLeafInt->keyArray[i])){
-							break;
-						}
-					}
-
-					// Shift the keys that are larger than the current key to the right
-					for(int j = currLeafInt->numKeys; j > i; j--){
-						currLeafInt->keyArray[j] = currLeafInt->keyArray[j-1];
-						currLeafInt->ridArray[j] = currLeafInt->ridArray[j-1];
-					}
-
-					// Insert the current key and record id
-					currLeafInt->keyArray[i] = keyInt;
-					currLeafInt->ridArray[i] = rid;
-					currLeafInt->numKeys++;
+					insertIntLeafArray(currLeafInt->keyArray, currLeafInt->ridArray, currLeafInt->numKeys, keyPair);
 
 					// Compare the extra key
 					if(lastKey < currLeafInt->keyArray[leafOccupancy-1]){
@@ -599,24 +538,7 @@ const void BTreeIndex::insertEntry(const void *key, const RecordId rid)
 					}
 				}
 				else{
-					// Find the spot to insert the key
-					int i = 0;
-					for(i = 0; i < currLeafInt->numKeys; i++){
-						if(!(keyInt >= currLeafInt->keyArray[i])){
-							break;
-						}
-					}
-
-					// Shift the keys that are larger than the current key to the right
-					for(int j = currLeafInt->numKeys; j > i; j--){
-						currLeafInt->keyArray[j] = currLeafInt->keyArray[j-1];
-						currLeafInt->ridArray[j] = currLeafInt->ridArray[j-1];
-					}
-
-					// Insert the current key and record id
-					currLeafInt->keyArray[i] = keyInt;
-					currLeafInt->ridArray[i] = rid;
-					currLeafInt->numKeys++;
+					insertIntLeafArray(currLeafInt->keyArray, currLeafInt->ridArray, currLeafInt->numKeys, keyPair);
 
 					// Write the changes
 					bufMgr->unPinPage(file, currPageId, true);
@@ -894,6 +816,46 @@ const void BTreeIndex::endScan()
 	nextEntry = -1;
 }
 
+// --------------------------------------------------------------------------------
+/*
+	Helper functions
+*/
+// --------------------------------------------------------------------------------
+
+// Sort the arrays in the leaf
+void BTreeIndex::insertIntLeafArray(void* array, void* ridArray, int& numItems, RIDKeyPair<int>* x){
+	int* arr = (int*)array;
+	RecordId* ridArr = (RecordId*)ridArray;
+
+	int i = 0;
+	for(i = 0; i < numItems; i++){
+		if(arr[i] > x->key){
+			break;
+		}
+	}
+
+	for(int j = numItems; j > i; j--){
+		arr[j] = arr[j-1];
+		arr[j] = arr[j-1];
+	}
+
+	arr[i] = x->key;
+	ridArr[i] = x->rid;
+
+	numItems++;
+}
+
+// Swap x keyPair with ykeyPair if x < y
+void BTreeIndex::swapIntKeyPair(RIDKeyPair<int>* x, RIDKeyPair<int>* y){
+	if(x->key < y->key){
+		int tempKey = x->key;
+		RecordId tempRid = x->rid;
+
+		x->set(y->rid, y->key);
+		y->set(tempRid, tempKey);		
+	}
+}
+
 // Print the whole tree
 void BTreeIndex::printTree(void){
 	Page* rootPage;
@@ -1073,7 +1035,7 @@ void BTreeIndex::printArray(void* array, int numItems, char type){
 			int* arr = (int*)array;
 
 			std::cout << "[";
-			for(int i = 0; i < numItems; i++){
+			for(int i = 0; i < numItems-1; i++){
 				std::cout << arr[i] << ",";
 			}
 			std::cout << arr[numItems-1] << "] " << numItems << " items" << std::endl;
@@ -1083,7 +1045,7 @@ void BTreeIndex::printArray(void* array, int numItems, char type){
 			double* arr = (double*)array;
 
 			std::cout << "[";
-			for(int i = 0; i < numItems; i++){
+			for(int i = 0; i < numItems-1; i++){
 				std::cout << arr[i] << ",";
 			}
 			std::cout << arr[numItems-1] << "] " << numItems << " items" << std::endl;
@@ -1093,7 +1055,7 @@ void BTreeIndex::printArray(void* array, int numItems, char type){
 			char** arr = (char**)array;
 
 			std::cout << "[";
-			for(int i = 0; i < numItems; i++){
+			for(int i = 0; i < numItems-1; i++){
 				std::cout << arr[i] << ",";
 			}
 			std::cout << arr[numItems-1] << "] " << numItems << " items" << std::endl;
