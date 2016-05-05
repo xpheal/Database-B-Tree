@@ -446,11 +446,14 @@ class BTreeIndex {
    */
 	Operator	highOp;
 
-  // Swap x keyPair with y keyPair if x < y
-  void swapIntKeyPair(RIDKeyPair<int>* x, RIDKeyPair<int>* y);
+  // Swap x PageKeyPair with y PageKeyPair if x < y
+  void swapIntPageKeyPair(PageKeyPair<int>* x, PageKeyPair<int>* y);
+
+  // Swap x RIDKeyPair with y RIDKeyPair if x < y
+  void swapIntRIDKeyPair(RIDKeyPair<int>* x, RIDKeyPair<int>* y);
 
   // Sort the key array and pageNo array
-  void insertIntNonLeafArray(void* array, int numItems);
+  void insertIntNonLeafArray(void* array, void* pageArray, int& numItems, PageKeyPair<int>* x);
 
   // Sort the key array and Rid array
   void insertIntLeafArray(void* array, void* ridArray, int& numItems, RIDKeyPair<int>* x);
