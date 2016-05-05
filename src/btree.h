@@ -434,7 +434,18 @@ class BTreeIndex {
    */
 	Operator	highOp;
 
-	
+  // Print tree
+  void printTree(void);
+
+  // Print non-leaf node
+  void printNonLeafNode(Page* page);
+
+  // Print out the leaf node
+  void printLeafNode(Page* page);
+
+  // Print out the array given, type = (i = int, d = double, c = string)
+  void printArray(void* array, int numItems, char type);
+
  public:
 
   /**

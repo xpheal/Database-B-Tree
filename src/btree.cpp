@@ -5,6 +5,7 @@
  * Copyright (c) 2012 Database Group, Computer Sciences Department, University of Wisconsin-Madison.
  */
 
+#include <queue>
 #include <stack>
 #include "btree.h"
 #include "filescan.h"
@@ -33,7 +34,6 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
 		const int attrByteOffset,
 		const Datatype attrType)
 {
-	scanExecuting = false;
 	// Generate index file name
 	std::ostringstream idxStr;
 	idxStr << relationName << '.' << attrByteOffset;
@@ -61,21 +61,6 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
 		this->attributeType = attrType;
 		this->headerPageNum = 1;
 		this->rootPageNum = metadata->rootPageNo;
-
-		switch(attributeType){
-			case INTEGER:
-				this->leafOccupancy = INTARRAYLEAFSIZE;
-				this->nodeOccupancy = INTARRAYNONLEAFSIZE;
-				break;
-			case DOUBLE:
-				this->leafOccupancy = DOUBLEARRAYLEAFSIZE;
-				this->nodeOccupancy = DOUBLEARRAYNONLEAFSIZE;
-				break;
-			case STRING:
-				this->leafOccupancy = STRINGARRAYLEAFSIZE;
-				this->nodeOccupancy = STRINGARRAYNONLEAFSIZE;
-				break;
-		}
 	}
 	else{
 		// File does not exist, create a new file
@@ -85,21 +70,6 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
 		this->bufMgr = bufMgrIn;
 		this->attrByteOffset = attrByteOffset;
 		this->attributeType = attrType;
-
-		switch(attributeType){
-			case INTEGER:
-				this->leafOccupancy = INTARRAYLEAFSIZE;
-				this->nodeOccupancy = INTARRAYNONLEAFSIZE;
-				break;
-			case DOUBLE:
-				this->leafOccupancy = DOUBLEARRAYLEAFSIZE;
-				this->nodeOccupancy = DOUBLEARRAYNONLEAFSIZE;
-				break;
-			case STRING:
-				this->leafOccupancy = STRINGARRAYLEAFSIZE;
-				this->nodeOccupancy = STRINGARRAYNONLEAFSIZE;
-				break;
-		}
 
 		// Allocate page for metadata, first page
 		Page* metadataPage;
@@ -134,10 +104,27 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
 		metadata->attrByteOffset = attrByteOffset;
 		metadata->attrType = attrType;
 		metadata->rootPageNo = rootPageNum;
+		scanExecuting = false;
 
 		// Write metadata and root to file
 		bufMgr->unPinPage(file, headerPageNum, true);
 		bufMgr->unPinPage(file, rootPageNum, true);
+
+		// Set attribute type
+		switch(attributeType){
+			case INTEGER:
+				this->leafOccupancy = INTARRAYLEAFSIZE;
+				this->nodeOccupancy = INTARRAYNONLEAFSIZE;
+				break;
+			case DOUBLE:
+				this->leafOccupancy = DOUBLEARRAYLEAFSIZE;
+				this->nodeOccupancy = DOUBLEARRAYNONLEAFSIZE;
+				break;
+			case STRING:
+				this->leafOccupancy = STRINGARRAYLEAFSIZE;
+				this->nodeOccupancy = STRINGARRAYNONLEAFSIZE;
+				break;
+		}
 
 		// Insert every tuple into the b+tree
 		{
@@ -174,77 +161,8 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
 			}
 			delete fsInsert;
 		}
-
 		// End of insert
-
-		// Debugging purposes
-		// Page* rootPagex;
-		// bufMgr->readPage(file, rootPageNum, rootPagex);
-		// NonLeafNodeInt* rootIntx = (NonLeafNodeInt*)rootPagex;
-
-		// Page* leafPagex;
-		// bufMgr->readPage(file, rootIntx->pageNoArray[12], leafPagex);
-		// LeafNodeInt* leafIntx = (LeafNodeInt*)leafPagex;	
-
-		// Page* leafPagexR;
-		// bufMgr->readPage(file, rootIntx->pageNoArray[13], leafPagexR);
-		// LeafNodeInt* leafIntxR = (LeafNodeInt*)leafPagexR;
-
-		// std::cout << std::endl << "numkeys: " << rootIntx->numKeys << std::endl << "[";
-		// for(int i = 0; i < leafOccupancy-1; i++){
-		// 	std::cout << rootIntx->keyArray[i] << ",";
-		// }
-		// std::cout << rootIntx->keyArray[leafOccupancy-1] << "]" << std::endl;
-
-		// std::cout << std::endl << "numkeys: " << rootIntx->numKeys << std::endl << "[";
-		// for(int i = 0; i < leafOccupancy; i++){
-		// 	std::cout << rootIntx->pageNoArray[i] << ",";
-		// }
-		// std::cout << rootIntx->pageNoArray[leafOccupancy] << "]" << std::endl;
-
-		// std::cout << std::endl << "numkeys: " << leafIntx->numKeys << std::endl << "[";
-		// for(int i = 0; i < leafOccupancy-1; i++){
-		// 	std::cout << leafIntx->keyArray[i] << ",";
-		// }
-		// std::cout << leafIntx->keyArray[leafOccupancy-1] << "]" << std::endl;
-
-		// std::cout << std::endl << "[";
-		// for(int i = 0; i < leafOccupancy-1; i++){
-		// 	std::cout << leafIntx->ridArray[i].slot_number << ",";
-		// }
-		// std::cout << leafIntx->ridArray[leafOccupancy-1].slot_number << "]" << std::endl;
-
-		// std::cout << std::endl << "numkeys: " << leafIntxR->numKeys << std::endl << "[";
-		// for(int i = 0; i < leafOccupancy-1; i++){
-		// 	std::cout << leafIntxR->keyArray[i] << ",";
-		// }
-		// std::cout << leafIntxR->keyArray[leafOccupancy-1] << "]" << std::endl;
-
-		// std::cout << std::endl << "[";
-		// for(int i = 0; i < leafOccupancy-1; i++){
-		// 	std::cout << leafIntxR->ridArray[i].slot_number << ",";
-		// }
-		// std::cout << leafIntxR->ridArray[leafOccupancy-1].slot_number << "]" << std::endl;
-
-		// bufMgr->unPinPage(file, rootIntx->pageNoArray[1], false);
-		// bufMgr->unPinPage(file, rootIntx->pageNoArray[0], false);
-		// bufMgr->unPinPage(file, rootPageNum, false);
-		// For debug usage for the moment
-		// bufMgr->readPage(file, rootPageNum, rootPage);
-		// switch(attributeType){
-		// 	case INTEGER:{
-		// 		NonLeafNodeInt* rootInt = (NonLeafNodeInt*)rootPage;
-		// 		break;
-		// 	}
-		// 	case DOUBLE:{
-		// 		NonLeafNodeDouble* rootDouble = (NonLeafNodeDouble*)rootPage;
-		// 		break;
-		// 	}
-		// 	case STRING:{
-		// 		NonLeafNodeString* rootString = (NonLeafNodeString*)rootPage;
-		// 		break;
-		// 	}
-		// }
+		// printTree();
 	}
 }
 
@@ -976,6 +894,215 @@ const void BTreeIndex::endScan()
 	currentPageNum = 0;
 	currentPageData = NULL;
 	nextEntry = -1;
+}
+
+// Print the whole tree
+void BTreeIndex::printTree(void){
+	Page* rootPage;
+	bufMgr->readPage(file, rootPageNum, rootPage);
+	int nonLeafNum = 0;
+	std::queue<PageId> pageQueue;
+
+	switch(attributeType){
+		case INTEGER:{
+			NonLeafNodeInt* root = (NonLeafNodeInt*)rootPage;
+			std::cout << "root: " << rootPageNum << std::endl;
+			printNonLeafNode(rootPage);
+			for(int i = 0; i < root->numKeys + 1; i++){
+				pageQueue.push(root->pageNoArray[i]);
+			}
+
+			if(root->level > 1){
+				nonLeafNum += root->numKeys + 1;
+			}
+			break;
+		}
+		case DOUBLE:{
+			NonLeafNodeDouble* root = (NonLeafNodeDouble*)rootPage;
+			std::cout << "root: " << rootPageNum << std::endl;
+			printNonLeafNode(rootPage);
+			for(int i = 0; i < root->numKeys + 1; i++){
+				pageQueue.push(root->pageNoArray[i]);
+			}
+
+			if(root->level > 1){
+				nonLeafNum += root->numKeys + 1;
+			}
+			break;
+		}
+		case STRING:{
+			NonLeafNodeString* root = (NonLeafNodeString*)rootPage;
+			std::cout << "root: " << rootPageNum << std::endl;
+			printNonLeafNode(rootPage);
+			for(int i = 0; i < root->numKeys + 1; i++){
+				pageQueue.push(root->pageNoArray[i]);
+			}
+
+			if(root->level > 1){
+				nonLeafNum += root->numKeys + 1;
+			}
+			break;
+		}
+	}
+	bufMgr->unPinPage(file, rootPageNum, false);
+
+	while(pageQueue.size() > 0){
+		Page* currPage;
+		PageId currPageId = pageQueue.front();
+		pageQueue.pop();
+		bufMgr->readPage(file, currPageId, currPage);
+		
+		switch(attributeType){
+			case INTEGER:{
+				if(nonLeafNum > 0){
+					NonLeafNodeInt* node = (NonLeafNodeInt*)currPage;
+					std::cout << "Non-leaf: " << currPageId << std::endl;
+					printNonLeafNode(currPage);
+					for(int i = 0; i < node->numKeys + 1; i++){
+						pageQueue.push(node->pageNoArray[i]);
+					}
+
+					if(node->level > 1){
+						nonLeafNum += node->numKeys + 1;
+					}
+				}
+				else{
+					std::cout << "Leaf: " << currPageId << std::endl;
+					printLeafNode(currPage);
+				}
+				break;
+			}
+			case DOUBLE:{
+				if(nonLeafNum > 0){
+					NonLeafNodeDouble* node = (NonLeafNodeDouble*)currPage;
+					std::cout << "Non-leaf: " << currPageId << std::endl;
+					printNonLeafNode(currPage);
+					for(int i = 0; i < node->numKeys + 1; i++){
+						pageQueue.push(node->pageNoArray[i]);
+					}
+
+					if(node->level > 1){
+						nonLeafNum += node->numKeys + 1;
+					}
+				}
+				else{
+					std::cout << "Leaf: " << currPageId << std::endl;
+					printLeafNode(currPage);
+				}
+				break;
+			}
+			case STRING:{
+				if(nonLeafNum > 0){
+					NonLeafNodeString* node = (NonLeafNodeString*)currPage;
+					std::cout << "Non-leaf: " << currPageId << std::endl;
+					printNonLeafNode(currPage);
+					for(int i = 0; i < node->numKeys + 1; i++){
+						pageQueue.push(node->pageNoArray[i]);
+					}
+
+					if(node->level > 1){
+						nonLeafNum += node->numKeys + 1;
+					}
+				}
+				else{
+					std::cout << "Leaf: " << currPageId << std::endl;
+					printLeafNode(currPage);
+				}
+				break;
+			}
+		}
+
+		bufMgr->unPinPage(file, currPageId, false);
+		nonLeafNum--;
+	}
+}
+
+// Print the non-leaf node, print both the keys and page no
+void BTreeIndex::printNonLeafNode(Page* page){
+	switch(attributeType){
+		case INTEGER:{
+			NonLeafNodeInt* node = (NonLeafNodeInt*)page;
+			std::cout << "Key array: " << std::endl;
+			printArray(node->keyArray, node->numKeys, 'i');
+			std::cout << "PageNo array: " << std::endl;
+			printArray(node->pageNoArray, node->numKeys+1, 'i');
+			break;
+		}
+		case DOUBLE:{
+			NonLeafNodeDouble* node = (NonLeafNodeDouble*)page;
+			std::cout << "Key array: " << std::endl;
+			printArray(node->keyArray, node->numKeys, 'd');
+			std::cout << "PageNo array: " << std::endl;
+			printArray(node->pageNoArray, node->numKeys+1, 'i');
+			break;
+		}
+		case STRING:{
+			NonLeafNodeString* node = (NonLeafNodeString*)page;
+			std::cout << "Key array: " << std::endl;
+			printArray(node->keyArray, node->numKeys, 's');
+			std::cout << "PageNo array: " << std::endl;
+			printArray(node->pageNoArray, node->numKeys+1, 'i');
+			break;
+		}
+	}
+}
+
+// Print the leaf node, only print the keys
+void BTreeIndex::printLeafNode(Page* page){
+	switch(attributeType){
+		case INTEGER:{
+			LeafNodeInt* node = (LeafNodeInt*)page;
+			printArray(node->keyArray, node->numKeys, 'i');
+			break;
+		}
+		case DOUBLE:{
+			LeafNodeDouble* node = (LeafNodeDouble*)page;
+			printArray(node->keyArray, node->numKeys, 'd');
+			break;
+		}
+		case STRING:{
+			LeafNodeString* node = (LeafNodeString*)page;
+			printArray(node->keyArray, node->numKeys, 's');
+			break;
+		}
+	}
+}
+
+// Print out the given array based on types
+void BTreeIndex::printArray(void* array, int numItems, char type){
+	switch(type){
+		case 'i':{
+			int* arr = (int*)array;
+
+			std::cout << "[";
+			for(int i = 0; i < numItems; i++){
+				std::cout << arr[i] << ",";
+			}
+			std::cout << arr[numItems-1] << "] " << numItems << " items" << std::endl;
+			break;
+		}
+		case 'd':{
+			double* arr = (double*)array;
+
+			std::cout << "[";
+			for(int i = 0; i < numItems; i++){
+				std::cout << arr[i] << ",";
+			}
+			std::cout << arr[numItems-1] << "] " << numItems << " items" << std::endl;
+			break;
+		}
+		case 'c':{
+			char** arr = (char**)array;
+
+			std::cout << "[";
+			for(int i = 0; i < numItems; i++){
+				std::cout << arr[i] << ",";
+			}
+			std::cout << arr[numItems-1] << "] " << numItems << " items" << std::endl;
+
+			break;
+		}
+	}
 }
 
 }

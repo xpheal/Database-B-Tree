@@ -72,18 +72,18 @@ at:4,19 -->:303:303:00303 string record:
 at:4,20 -->:304:304:00304 string record:
 at:4,21 -->:305:305:00305 string record:
 ...
-Number of results: 100
+Number of results: 99
 
 
-Test FAILS at line no:424
-Expected no of records:99Scan for (300,400)
-at:4,17 -->:301:301:00301 string record:
-at:4,18 -->:302:302:00302 string record:
-at:4,19 -->:303:303:00303 string record:
-at:4,20 -->:304:304:00304 string record:
-at:4,21 -->:305:305:00305 string record:
+Test passed at line no:424
+Scan for [3000,4000)
+at:32,56 -->:3000:3000:03000 string record:
+at:32,57 -->:3001:3001:03001 string record:
+at:32,58 -->:3002:3002:03002 string record:
+at:32,59 -->:3003:3003:03003 string record:
+at:32,60 -->:3004:3004:03004 string record:
 ...
-Number of results: 100
+Number of results: 1000
 
 
-Actual no of records found:100
+Test passed at line no:425
