@@ -40,13 +40,37 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
 	indexFileName = idxStr.str(); // index name is the name of the index file
 	outIndexName = indexFileName;
 
+	// Set the variables
+	scanExecuting = false;
+	this->bufMgr = bufMgrIn;
+	this->attrByteOffset = attrByteOffset;
+	this->attributeType = attrType;
+	this->headerPageNum = 1;
+
+	// Set attribute type
+	switch(attributeType){
+		case INTEGER:
+			this->leafOccupancy = INTARRAYLEAFSIZE;
+			this->nodeOccupancy = INTARRAYNONLEAFSIZE;
+			break;
+		case DOUBLE:
+			this->leafOccupancy = DOUBLEARRAYLEAFSIZE;
+			this->nodeOccupancy = DOUBLEARRAYNONLEAFSIZE;
+			break;
+		case STRING:
+			this->leafOccupancy = STRINGARRAYLEAFSIZE;
+			this->nodeOccupancy = STRINGARRAYNONLEAFSIZE;
+			break;
+	}
+
+	// Check if file exist
 	if(File::exists(indexFileName)){
 		// If file exist, open the file
 		this->file = new BlobFile(indexFileName, false);
 		Page * firstPage;
 		
 		// Read the metadata
-		bufMgr->readPage(file, 1, firstPage);
+		bufMgr->readPage(file, headerPageNum, firstPage);
 		IndexMetaInfo* metadata = (IndexMetaInfo*)firstPage;
 
 		// Check if the values in the metadata match with the given constructor parameters
@@ -56,20 +80,11 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
 			// TODO: better implementation, more info
 		}
 
-		this->bufMgr = bufMgrIn;
-		this->attrByteOffset = attrByteOffset;
-		this->attributeType = attrType;
-		this->headerPageNum = 1;
 		this->rootPageNum = metadata->rootPageNo;
 	}
 	else{
 		// File does not exist, create a new file
 		this->file = new BlobFile(indexFileName, true);
-
-		// Assign values to the private variables
-		this->bufMgr = bufMgrIn;
-		this->attrByteOffset = attrByteOffset;
-		this->attributeType = attrType;
 
 		// Allocate page for metadata, first page
 		Page* metadataPage;
@@ -82,18 +97,18 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
 		// Initialize the root node, level is set to 0
 		switch(attributeType){
 			case INTEGER:{
-				NonLeafNodeInt* rootInt = (NonLeafNodeInt*)rootPage;
-				rootInt->level = 0;
+				NonLeafNodeInt* root = (NonLeafNodeInt*)rootPage;
+				root->level = 0;
 				break;
 			}
 			case DOUBLE:{
-				NonLeafNodeDouble* rootDouble = (NonLeafNodeDouble*)rootPage;
-				rootDouble->level = 0;
+				NonLeafNodeDouble* root = (NonLeafNodeDouble*)rootPage;
+				root->level = 0;
 				break;
 			}
 			case STRING:{
-				NonLeafNodeString* rootString = (NonLeafNodeString*)rootPage;
-				rootString->level = 0;
+				NonLeafNodeString* root = (NonLeafNodeString*)rootPage;
+				root->level = 0;
 				break;
 			}
 		}	
@@ -104,27 +119,10 @@ BTreeIndex::BTreeIndex(const std::string & relationName,
 		metadata->attrByteOffset = attrByteOffset;
 		metadata->attrType = attrType;
 		metadata->rootPageNo = rootPageNum;
-		scanExecuting = false;
 
 		// Write metadata and root to file
 		bufMgr->unPinPage(file, headerPageNum, true);
 		bufMgr->unPinPage(file, rootPageNum, true);
-
-		// Set attribute type
-		switch(attributeType){
-			case INTEGER:
-				this->leafOccupancy = INTARRAYLEAFSIZE;
-				this->nodeOccupancy = INTARRAYNONLEAFSIZE;
-				break;
-			case DOUBLE:
-				this->leafOccupancy = DOUBLEARRAYLEAFSIZE;
-				this->nodeOccupancy = DOUBLEARRAYNONLEAFSIZE;
-				break;
-			case STRING:
-				this->leafOccupancy = STRINGARRAYLEAFSIZE;
-				this->nodeOccupancy = STRINGARRAYNONLEAFSIZE;
-				break;
-		}
 
 		// Insert every tuple into the b+tree
 		{
