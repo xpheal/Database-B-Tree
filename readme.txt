@@ -1,5 +1,5 @@
 Group Members:
-Jake Oney
+Jake Oney, oney, 9065825318
 Sophia Ehlen, sophia, 9066553919
 Wayne Chew (Ming Chan)
 
