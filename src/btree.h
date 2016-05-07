@@ -7,6 +7,8 @@
 
 #pragma once
 
+#include <queue>
+#include <stack>
 #include <iostream>
 #include <string>
 #include "string.h"
@@ -446,17 +448,26 @@ class BTreeIndex {
    */
 	Operator	highOp;
 
+  // scan the tree for the key
+  // return the leaf's pageId
+  // the leaf's right sibling pageId, if there's no sibling, return 0
+  // a pageId stack of the traversal down the tree
+  void scanTree(void* key, PageId& pageId, PageId& rightPageId, std::stack<PageId>* stack);
+
+  // scan the tree for the key and return the pageId
+  void scanTree(void* key, PageId& pageId);
+
   // Swap x PageKeyPair with y PageKeyPair if x < y
-  void swapIntPageKeyPair(PageKeyPair<int>* x, PageKeyPair<int>* y);
+  void swapPageKeyPair(void* x, void* y);
 
   // Swap x RIDKeyPair with y RIDKeyPair if x < y
-  void swapIntRIDKeyPair(RIDKeyPair<int>* x, RIDKeyPair<int>* y);
+  void swapRIDKeyPair(void* x, void* y);
 
   // Sort the key array and pageNo array
-  void insertIntNonLeafArray(void* array, void* pageArray, int& numItems, PageKeyPair<int>* x);
+  void insertNonLeafArray(void* array, void* pageArray, int& numItems, void* pageKey);
 
   // Sort the key array and Rid array
-  void insertIntLeafArray(void* array, void* ridArray, int& numItems, RIDKeyPair<int>* x);
+  void insertLeafArray(void* array, void* ridArray, int& numItems, void* ridKey);
 
   // Print tree
   void printTree(void);
